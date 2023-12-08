@@ -1,0 +1,56 @@
+{
+  "name": "url-reference",
+  "version": "0.8.0",
+  "description": "URLReference class",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "homepage": "https://github.com/alwinb/url-reference#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alwinb/url-reference.git"
+  },
+  "keywords": [
+    "URL",
+    "URI",
+    "IRI",
+    "URL-reference",
+    "URI-reference",
+    "IRI-reference",
+    "relative URL",
+    "relative reference",
+    "reference resolution",
+    "transform references",
+    "base URL",
+    "opaque path",
+    "opaque host",
+    "RFC3896",
+    "RFC3897",
+    "URL Specification",
+    "WHATWG URL Standard",
+    "reference implementation",
+    "normalization",
+    "normalisation",
+    "host",
+    "hostname",
+    "username",
+    "password",
+    "port",
+    "pathname",
+    "query",
+    "fragment",
+    "domain",
+    "punycode",
+    "percent encode",
+    "percent decode",
+    "percent coding",
+    "resolution"
+  ],
+  "author": "Alwin Blok",
+  "license": "MIT",
+  "dependencies": {
+    "spec-url": "^2.4.0-dev"
+  }
+}
