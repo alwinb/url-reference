@@ -1,6 +1,6 @@
 {
   "name": "url-reference",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "URLReference class",
   "main": "index.js",
   "type": "module",
@@ -51,6 +51,6 @@
   "author": "Alwin Blok",
   "license": "MIT",
   "dependencies": {
-    "spec-url": "^2.4.0-dev"
+    "spec-url": "^2.5.0-dev"
   }
 }

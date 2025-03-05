@@ -233,6 +233,11 @@ All properties are nullable, however some invariants are maintained.
 - `query`
 - `fragment`
 
+The properties `driveletter`, `pathroot` and `filename` do not use the idiomatic
+camelCase style. This is is done to remain consistent with existing property
+names of the WHATWG URL class, such as `pathname` and `hostname`.
+
+
 
 Licence
 -------

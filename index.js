@@ -1,5 +1,6 @@
-import * as core from '../spec-url/src/index.js'
+import * as core from 'spec-url'
 const log = console.log.bind (console)
+const version = '0.8.1'
 
 
 // URLReference class
@@ -46,6 +47,10 @@ function low (input) {
   String (input) .toLowerCase ()
 }
 
+
+// URLReference
+// ------------
+
 // Here it goes! The URLReference class.
 
 class URLReference {
@@ -74,108 +79,40 @@ class URLReference {
     base = toURLRecord (base)
     const r = new URLReference ()
     r[$] = base != null
-      ? core.normalise (core.resolve (this[$], base))
-      : core.normalise (core.resolve (this[$]))
+      ? core.resolve (this[$], base, { unicode:true }) // core.resolve also does normalisation
+      : core.resolve (this[$], undefined, { unicode:true })
     return r
   }
 
   normalize () {
     const r = new URLReference ()
-    r[$] = core.normalize (this[$])
+    r[$] = core.normalize (this[$], { unicode:true })
     return r
   }
   
   normalise () {
     return this.normalize ()
   }
+  
+  // Stringify
 
-  toString () {
-    return core.print (this[$], 'URL')
-  }
-
-  toJSON () {
-    return core.print (this[$], 'WHATWG')
-  }
-
-  get href () {
-    return core.print (this[$], 'WHATWG')
-  }
+  toString () { return core.print (this[$], { unicode:true  }) }
+  toJSON   () { return core.print (this[$], { unicode:false }) }
+  get href () { return core.print (this[$], { unicode:false }) }
 
   // Getters
 
-  get scheme () {
-    return this[$].scheme ?? null
-  }
-
-  get username () {
-    return this[$].user ?? null
-  }
-
-  get password () {
-    return this[$].pass ?? null
-  }
-
-  get hostname () {
-    return (this[$].host != null
-      ? core.printHost (this[$].host)
-      : null)
-  }
-
-  get port () {
-    return this[$].port ?? null
-  }
-  
-  // driveletter, pathroot and filename do not use the idiomatic
-  // camelCase style. This is is done to remain consistent with the
-  // existing property names such as pathname and hostname.
-
-  get driveletter () {
-    return this[$].drive ?? null
-  }
-
-  get pathroot () {
-    return this[$].root ?? null
-  }
-
-  get filename () {
-    return this[$].file ?? null
-  }
-  
- // REVIEW should this ever return null?
-  get pathname () {
-    return core.pathname (this[$])
-  }
-
-  get query () {
-    return this[$].query ?? null
-  }
-
-  get fragment () {
-    return this[$].fragment ?? null
-  }
-  
-  /* Getters 'protocol', 'search' and 'hash' are present
-  // for compatability with the legacy URL API. They are 
-  // nullable, but otherwise use the legacy behaviour.
-
-  get protocol () {
-    return (this[$].scheme
-      ? this[$].scheme + ':'
-      : null)
-  }
-
-  get search () {
-    return (this[$].query != null
-      ? '?' + this[$].query
-      : null)
-  }
-
-  get hash () {
-    return (this[$].hash != null
-      ? '#' + this[$].hash
-      : null)
-  }
-  //*/
+  get scheme      () { return this[$].scheme ?? null }
+  get username    () { return this[$].user ?? null }
+  get password    () { return this[$].pass ?? null }
+  get hostname    () { return this[$].host != null ? String (this[$].host) : null }
+  get port        () { return this[$].port ?? null }
+  get driveletter () { return this[$].drive ?? null }
+  get pathroot    () { return this[$].root ?? null }
+  get filename    () { return this[$].file ?? null }
+  get pathname    () { return core.pathname (this[$]) } // REVIEW should this ever return null?
+  get query       () { return this[$].query ?? null }
+  get fragment    () { return this[$].fragment ?? null }
 
 
   // Setters
@@ -189,10 +126,10 @@ class URLReference {
 
     value = String (value)
     if (/^[A-Za-z][A-Za-z0-9+-.]+$/ .test (value))
-      this[$].scheme = value
+      return this[$].scheme = value
 
     else
-      throw new Error (`URLReference: cannot change the scheme of <${this}> using an invalid scheme-string`)
+      throw new Error (`URLReference: cannot change the scheme of <${this}> to an invalid scheme-string`)
   }
 
   // NB Setting the username also resets the password.
@@ -226,19 +163,19 @@ class URLReference {
 
   set hostname (value) {
     const r = this[$]
-    delete r.user
-    delete r.pass
-    delete r.port
-    if (value == null)
-      delete r.host
+    delete r.user; delete r.pass; delete r.port
+    if (value == null) delete r.host
     else {
-      r.host = String (value)
+      value = String (value)
+      if (value.length >= 2 && value[0] === '[') // && value[value.length-1] === ']')
+        r.host = String (new core.URLIPv6Address (value))
+      else r.host = String (value)
       if (r.dirs || r.file) r.root = '/'
     }
   }
 
   set port (value) {
-    if (value == null)
+    if (value == null) //  || value === '')
       return delete this[$].port
 
     if (this[$].host == null)
@@ -247,22 +184,20 @@ class URLReference {
     if (value === '')
       return this[$].port = ''
 
-    while (true) { // being creative ?
-
-      if (typeof value === 'number') {
-        value = Math.floor (value)
-        if (value >= 1<<16) throw new Error (`URLReference: cannot set the port on <${this}> to a value larger than 2**16 - 1`)
-        return this[$].port = value
-      }
-
-      else {
+    switch (typeof value) {
+      default:
         value = String (value)
         if (!/^[0-9]+$/.test (value))
           throw new Error (`URLReference: cannot set the port on <${this}> using a string that contains non-digit characters`)
         value = parseInt (value, 10)
-      }
-    } // very funny /;P
+        // fallthrough // REVIEW does that actually work with a default case up top?
 
+      case 'number':
+        value = Math.trunc (value)
+        if (value >= 1<<16)
+          throw new Error (`URLReference: cannot set the port on <${this}> to a value larger than 2**16 - 1`)
+        return this[$].port = value
+    }
   }
 
   // NB Setting a drive-letter will also set the scheme to "file". If a non-file
@@ -308,23 +243,20 @@ class URLReference {
   // the pathname consists of
   // drive, root, dirs, file
 
-  // REVIEW should this detect drives if no scheme is present?
-  // I do detect drives when parsing schemeless URL strings,
-  // but I'm not sure this is a good idea for the pathname setter
+  // NB detects drives if the scheme is file, or if no scheme is present.
+  // If a drive is found and no scheme is present, then the scheme is
+  // implicitly set to 'file'.
 
   set pathname (value) {
     const r = this[$]
-    if (value == null || value === '') {
-      delete r.drive
-      delete r.root
-      delete r.dirs
-      delete r.file
-      return
-    }
+    delete r.drive
+    delete r.root
+    delete r.dirs
+    delete r.file
+    if (value == null || value === '') return
     const mode = core.modeFor (r, core.modes.file)
     const path = core.parsePath (value, mode)
-    // if (path.drive && !this[$].scheme)
-    //   this[$].scheme = 'file'
+    if (path.drive && !this[$].scheme) this[$].scheme = 'file'
     Object.assign (r, path)
     if ((r.host != null || r.drive) && (r.dirs || r.file))
       r.root = '/'
@@ -344,42 +276,10 @@ class URLReference {
     this[$].hash = value // NB core uses 'hash' to mean 'fragment'
   }
 
-  // Setters `protocol`, `search` and `hash` are present
-  // for compat with the legacy URL API.
-  /*
-  set protocol (value) {
-    // NB this uses the scheme setter to trigger the additional
-    // checks on URLs that have a drive-letter
-    if (value == null)
-      this.scheme = null
-    value = String (value)
-    if (value[value.length-1] === ':')
-      value = value.substr (0, value.length-1)
-    this.scheme = value
-  }
-
-  set search (value) {
-    if (value == null)
-      return delete this[$].query
-    value = String (value)
-    if (value[0] === '?') value = value.substr (1)
-    this[$].query = value    
-  }
-  
-  set hash (value) {
-    if (value == null)
-      return delete this[$].hash
-    value = String (value)
-    if (value[0] === '#') value = value.substr (1)
-    this[$].hash = value    
-  }
-  */
-
 }
 
 
 // Exports
 // -------
 
-const version = '0.8.0'
 export { URLReference, version }

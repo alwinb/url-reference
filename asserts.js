@@ -6,7 +6,7 @@ const log = console.log.bind (console)
 // Assertion tests
 // ===============
 
-// This is is just a file with a list of assertions, to be
+// This is is just a file with a list of assertions,
 // to be run as a script; no test-runner.
 
 
@@ -24,7 +24,7 @@ var r = new URLReference ('//foo', 'http:')
 assert.equal (r.scheme, 'http')
 assert.equal (r.hostname, 'foo')
 
-// Parsing uses the base to determine the parser settings,
+// Parsing uses the base to determine how backslashes are handled.
 // The input here is parsed as '//foo' because 'http' is 'special'.
 
 var r = new URLReference ('\\\\foo', 'http:')
@@ -44,7 +44,7 @@ assert.equal (r.hostname, 'foo')
 assert.equal (r.pathname, '/bar/bee')
 
 
-// With a non-special URL as a base, '\' is not equivalent with '/'
+// With a non-special URL as a base, '\' is not treadted as a separator.
 // REVIEW It would be nice to allow parsing against 'otp:', right?
 // REVIEW It might b better to throw on `\` in non-special URLs.
 
@@ -54,7 +54,7 @@ assert.equal (r.hostname, null)
 assert.equal (r.filename, '\\\\foo')
 
 // Drive letters in scheme-less input are detected. 
-// If found, an explicit file scheme is added.
+// If found, an explicit file scheme is added (!)
 
 var r = new URLReference ('/c:/foo/bar')
 assert.equal (r.href, 'file:/c:/foo/bar')
@@ -64,7 +64,7 @@ var r = new URLReference ('c|/foo/bar')
 assert.equal (r.href, 'file:/c|/foo/bar')
 assert.equal (r.driveletter, 'c|')
 
-// This can only be suppressed by supplying a non-file base
+// This bahviour is suppressed when given a non-file base:
 
 var r = new URLReference ('/c:/foo/bar', 'http:')
 assert.equal (r.href, 'http:/c:/foo/bar')
@@ -82,9 +82,13 @@ assert.equal (r.href, '%CE%B1%CE%B2%CE%B3')
 assert.equal (String (r), 'αβγ')
 
 // This is also true for hostnames.
-// Note that a new URLReference hostname is always an opaque-host-string.
+// Note that a new URLReference hostname is always an opaque-host-string,
+// even if it has a web-scheme. (Parsing and verifying the opaque host
+// as a domain is done by the resolve method, not by the constructor).
+// Href uses percent-coding to convert the opaque-hostname to ASCII.
 
 var r = new URLReference ('http://🌲')
+assert.equal (r.href, 'http://%F0%9F%8C%B2')
 assert.equal (String (r), 'http://🌲')
 assert.equal (r.hostname, '🌲')
 
@@ -110,7 +114,7 @@ assert.equal (r.hostname, '🌲')
 // Rebase and Resolve Methods
 // --------------------------
 
-// Rebase
+// ### Rebase
 
 var r = new URLReference ('foo') .rebase ('//host')
 assert.equal (r.href, '//host/foo')
@@ -154,7 +158,7 @@ var r = new URLReference (null) .rebase ('#bar')
 assert.equal (r.href, '')
 
 
-// Resolve
+// ### Resolve
 
 // Resolve can be used without argument to coerce an URL
 // to an absolute URL and applies normalisation.
@@ -171,10 +175,8 @@ assert.equal (r.pathname, 'foo')
 assert.equal (r.filename, 'foo') // REVIEW should this be exposed as filename, given it is an opaquePath?
 
 
-// Getters and Setters
-// -------------------
-
 // Scheme and protocol
+// -------------------
 
 var r = new URLReference ('xf://foo')
 assert.equal (r.scheme, 'xf')
@@ -206,47 +208,27 @@ assert.equal (r.href, 'foo%3Abar/')
 // The WHATWG standard has some issues that block me from doing so without failing some tests.
 // They don't have a drive-letter property so for them these are not reparse bugs.
 
-// var r = new URLReference ('http:c:')
+// Preventing drive letter ambiguities
+
+var r = new URLReference ('http:c:')
+r.scheme = null
+assert.equal (r.href, 'c%3A')
+
+// var r = new URLReference ('http:c|/')
 // r.scheme = null
-// assert.equal (r.href, 'c%3A')
-//
-// var r = new URLReference ('http:c|')
-// r.scheme = null
-// assert.equal (r.href, 'c%3A')
+// assert.equal (r.href, 'c%7C/') // FIXME
 
 // But this is ok
-var r = new URLReference ('http:c|a')
+var r = new URLReference ('http:c|a-b')
 r.scheme = null
-assert.equal (r.href, 'c|a')
+assert.equal (r.pathname, 'c|a-b')
 
 
 
+// Authority
+// ---------
 
-// Hostname
-
-var r = new URLReference ('otp://foo')
-
-// I am allowing invalid opaque-host codepoints in the setter
-
-r.hostname = 'foo{}[]'
-assert.equal (r.href, 'otp://foo{}%5B%5D')
-// REVIEW: should the setter apply percent coding? WHATWG does;
-// I like the idea fully decoded components, but then again URI also has reserved characters.
-// assert.equal (r.hostname, 'foo{}%5B%5D')
-assert.equal (r.hostname, 'foo{}[]')
-
-r.hostname = null 
-assert.equal (r.hostname, null)
-assert.equal (r.href, 'otp:')
-
-
-// Hostname setter resets credentials and port
-
-var r = new URLReference ('otp://joe:secret@host:22')
-r.hostname = 'other'
-assert.equal (r.href, 'otp://other')
-
-// Username 
+// ### Username 
 
 // Setter resets password
 
@@ -259,7 +241,7 @@ r.username = null
 assert.equal (r.href, 'otp://host:22')
 
 
-// Password
+// ### Password
 
 // You cannot set a password on an URL without host
 
@@ -280,10 +262,57 @@ assert.throws(
   _ => r.password = '',
   /cannot set a password .*does not have a username/)
 
+
+// ### Hostname
+
+// Hostname setter resets credentials and port
+
+var r = new URLReference ('otp://joe:secret@host:22')
+r.hostname = 'other'
+assert.equal (r.href, 'otp://other')
+
+// Hostnames are IPv6 or opaque hosts by default
+
+var r = new URLReference ('sc://')
+r.hostname = '[1:0:0:0::1]'
+assert.equal (r.hostname, '[1::1]')
+
+assert.throws (
+  _ => r.hostname = '[1:0:0:0::11', 
+  /Invalid .*IPv6/)
+
+
+/*
+// I am allowing invalid opaque-host codepoints in the setter
+
+// REVIEW -- I have disabled this for now
+// I may allow this again in a later stage
+
+var r = new URLReference ('otp://foo')
+r.hostname = 'foo{}[]'
+assert.equal (r.href, 'otp://foo{}%5B%5D')
+
+// REVIEW: should the setter apply percent coding? WHATWG does;
+// I like the idea fully decoded components, but then again URI also has reserved characters.
+
+// assert.equal (r.hostname, 'foo{}%5B%5D')
+assert.equal (r.hostname, 'foo{}[]')
+
+r.hostname = null 
+assert.equal (r.hostname, null)
+assert.equal (r.href, 'otp:')
+
+//*/
+
+
+
   
-// Port
+// ### Port
 
 var r = new URLReference ('//host')
+
+// REVIEW / It may be wise to remove empty ports,
+// so as to avoid possible confusion with drive letters.
 
 r.port = ''
 assert.equal (r.port, '')
@@ -295,7 +324,7 @@ assert.equal (r.href, '//host')
 r.port = 0xA
 assert.equal (r.href, '//host:10')
 
-// Floats are floored // REVIEW
+// NB Floats are truncated
 r.port = 1.98
 assert.equal (r.href, '//host:1')
 
@@ -314,7 +343,9 @@ assert.throws (
   /cannot set (a |the )?port/)
 
 
+
 // Drive letters
+// -------------
 
 var r = new URLReference ()
 
@@ -347,7 +378,7 @@ assert.equal (r.href, 'file:/c:')
 
 var r = new URLReference ('file:')
 r.driveletter = 'c|'
-assert.equal (r.href, 'file:/c|')
+assert.equal (r.href, 'file:/c|') // REVIEW should we normalise to c: ?
 
 // But not something else
 
@@ -364,20 +395,9 @@ assert.throws (
   /cannot set (a|the) drive-letter/)
 
 
-// Pathname
-// TODO
-
-
-// Filename
-
-var r = new URLReference ('http://host/')
-r.filename = 'hello'
-assert.equal (r.href, 'http://host/hello')
-r.filename = null
-assert.equal (r.href, 'http://host/')
-
 
 // Pathroot
+// --------
 
 // If an URLReference has an authority or a drive, and it has dir or file components,
 // then it must also have has a pathroot. 
@@ -432,19 +452,14 @@ r.pathname = 'relative/path'
 assert.equal (r.href, 'sc:///relative/path')
 
 // Setting a relative pathname on an URLReference that has a
-// drive-letter also sets the path-root.
+// drive-letter also sets the path-root
 
 var r = new URLReference ('file:///c:')
 r.filename = 'foo'
 assert.equal (r.href, 'file:///c:/foo')
 
-var r = new URLReference ('file:///c:')
-r.pathname = 'relative/path'
-assert.equal (r.href, 'file:///c:/relative/path')
-
-
 // One cannot remove the path-root from an URLReference that 
-// that has an authority, and a nonempty relative path
+// that has both an authority and dir or file components
 
 var r = new URLReference ('//auth/dir/')
 assert.throws (
@@ -459,7 +474,7 @@ assert.throws (
   /cannot remove (the )?path-root/)
 
 // One cannot remove the path-root from an URLReference that 
-// that has a drive-letter and a nonempty relative path
+// that has a drive-letter and dir or file components
 
 var r = new URLReference ('/c:/dir/')
 assert.throws (
@@ -472,7 +487,56 @@ assert.throws (
   /cannot remove (the )?path-root/)
 
 
-var r= new URLReference ('foo/bar/µu')
+// Pathname
+// --------
+
+// pathname is pretty much a legacy setter and it
+// affects all drive / root / dir and file components at once
+
+// Setting a relative path on an URL with a drive
+// will remove the drive.
+
+var r = new URLReference ('file:/c:')
+r.pathname = 'path/to/file'
+assert.equal (r.href, 'file:path/to/file')
+
+// REVIEW Setting a relative path will remove all 
+// drive / root / dir / file components. However if the URL
+// has an authority then it will set the path-root.
+
+var r = new URLReference ('file:///c:')
+r.pathname = 'path/to/file'
+assert.equal (r.href, 'file:///path/to/file')
+
+
+// assert.equal (r.href, 'file:///c:/relative/path')
+
+var r = new URLReference ('foo/bar')
+r.hostname = 'Bee' // adds the root too
+assert.equal (r.href, '//Bee/foo/bar')
+
+// Setting a pathname with a drive-letter in it,
+// in an URL that does not have a scheme,
+// will implicitly add the file: scheme (!)
+
+var r = new URLReference ('index.html?que=hi!')
+r.pathname = 'c:'
+assert.equal (r.href, 'file:/c:?que=hi!')
+
+var r = new URLReference ('/c:/')
+r.pathname = 'relative'
+assert.equal (r.href, 'file:relative')
+
+
+// Filename
+// --------
+
+var r = new URLReference ('http://host/')
+r.filename = 'hello'
+assert.equal (r.href, 'http://host/hello')
+r.filename = null
+assert.equal (r.href, 'http://host/')
+
 
 // That's all folks!
 
